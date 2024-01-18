@@ -1,0 +1,13 @@
+# Installed packages: anyone can recreate them with "npm install"
+node_modules/
+
+# Local settings, which may hold secrets (Step 2)
+.env
+
+# The task data file, created when the server runs (Step 16)
+data/
+
+# Logs and system files
+*.log
+.DS_Store
+Thumbs.db
