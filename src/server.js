@@ -1,4 +1,5 @@
 import express from "express";
+import { config } from "./config.js";
 
 // The application: a list of "when a request like THIS arrives, do THAT".
 const app = express();
@@ -20,9 +21,7 @@ app.get("/", (req, res) => {
 
 // Start listening for requests. A PORT is like a door number on this
 // computer: requests to http://localhost:3000 arrive at door 3000.
-// (Step 3 reads the port from settings instead of fixing it here.)
-const PORT = 3000;
-
-app.listen(PORT, () => {
-  console.log(`Task API listening on http://localhost:${PORT}`);
+// The number comes from the settings (config.js), not from the code.
+app.listen(config.port, () => {
+  console.log(`Task API (${config.environment}) listening on http://localhost:${config.port}`);
 });
