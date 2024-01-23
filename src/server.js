@@ -1,52 +1,50 @@
-import express from "express";
+import { createApp } from "./app.js";
 import { config } from "./config.js";
 
-// The application: a list of "when a request like THIS arrives, do THAT".
-const app = express();
+// Starts the API: builds the app, listens on the port, and stops cleanly.
+// This is the file `npm start` runs. Everything about WHAT the API does is
+// in app.js; this file is only about RUNNING it.
 
-// Express adds "X-Powered-By: Express" to every response. It tells anyone
-// probing the server what software it runs (useful for finding known
-// weaknesses), and helps nobody else. Switch it off.
-app.disable("x-powered-by");
+const app = createApp({ environment: config.environment });
 
-// A ROUTE: a method + a path, and the function that handles it.
-//   GET /  ->  answer with a small JSON welcome
-//
-// Express calls the handler with two objects:
-//   req (request):  what the client sent: method, path, headers, body...
-//   res (response): what we send back
-app.get("/", (req, res) => {
-  // res.json() turns the object into JSON text, and sets the
-  // Content-Type header to application/json so the client knows what it is
-  res.json({
-    name: "Task API",
-    message: "Hello! This API will manage tasks. Try GET /tasks soon.",
-  });
-});
-
-// A learning aid: answers ANY method on /echo with what it received.
-// Only in development: a real API shouldn't show visitors its headers.
-// app.all matches every method (GET, POST, PATCH, DELETE...).
-if (config.environment === "development") {
-  app.all("/echo", (req, res) => {
-    res.json({
-      method: req.method, // GET, POST...
-      path: req.path, // /echo
-      query: req.query, // ?status=done&page=2 -> { status: "done", page: "2" }
-      headers: {
-        // A few of the headers the client sent (names are lower-case)
-        host: req.get("host"),
-        "user-agent": req.get("user-agent"),
-        accept: req.get("accept"),
-        "content-type": req.get("content-type") ?? null,
-      },
-    });
-  });
-}
-
-// Start listening for requests. A PORT is like a door number on this
-// computer: requests to http://localhost:3000 arrive at door 3000.
-// The number comes from the settings (config.js), not from the code.
-app.listen(config.port, () => {
+// app.listen gives back the underlying Node HTTP server, which we need in
+// order to stop it later. A PORT is like a door number on this computer:
+// requests to http://localhost:3000 arrive at door 3000.
+const server = app.listen(config.port, () => {
   console.log(`Task API (${config.environment}) listening on http://localhost:${config.port}`);
 });
+
+// Listening can fail. The usual reason: something else (another copy of
+// this server, perhaps) is already using the port. Say so plainly.
+server.on("error", (error) => {
+  if (error.code === "EADDRINUSE") {
+    console.error(`Port ${config.port} is already in use. Stop the other program, or set PORT in .env.`);
+  } else {
+    console.error("The server couldn't start:", error.message);
+  }
+  process.exit(1); // a non-zero exit code means "it failed"
+});
+
+// ===== Stopping cleanly =====
+// Ctrl+C sends the program a SIGINT signal; hosting services send SIGTERM
+// when they stop or restart an app. Instead of dying mid-request:
+//   1. stop accepting NEW connections
+//   2. let requests already in progress finish
+//   3. then exit
+// (Step 28 adds "make sure the tasks file is saved" here too.)
+function shutDown(signal) {
+  console.log(`${signal} received: shutting down...`);
+  server.close(() => {
+    console.log("Server stopped. Bye!");
+    process.exit(0);
+  });
+  // A request that never finishes mustn't keep the server alive forever.
+  // unref(): this timer alone won't keep Node running.
+  setTimeout(() => {
+    console.error("Still busy after 10 seconds: forcing the exit.");
+    process.exit(1);
+  }, 10_000).unref();
+}
+
+process.on("SIGINT", () => shutDown("SIGINT"));
+process.on("SIGTERM", () => shutDown("SIGTERM"));
