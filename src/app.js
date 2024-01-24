@@ -1,4 +1,7 @@
 import express from "express";
+// Importing a JSON file needs the "with { type: 'json' }" part (an import
+// ATTRIBUTE): it tells Node to read the file as data, never run it as code
+import packageInfo from "../package.json" with { type: "json" };
 
 // Builds the Express application: its settings and routes. It does NOT
 // start listening: that's server.js's job.
@@ -30,6 +33,25 @@ export function createApp({ environment = "development" } = {}) {
     res.json({
       name: "Task API",
       message: "Hello! This API will manage tasks. Try GET /tasks soon.",
+    });
+  });
+
+  // GET /health  ->  "I'm alive", with a few facts about this server.
+  //
+  // A HEALTH CHECK: hosting services call it every few seconds and restart
+  // the app if it stops answering; monitoring tools graph it; and it's how
+  // you check which version is actually running. It must be FAST and never
+  // fail for a silly reason, so it does as little as possible.
+  const startedAt = new Date();
+  app.get("/health", (req, res) => {
+    // Never cached: an old "ok" saved by some proxy would be worse than useless
+    res.set("Cache-Control", "no-store");
+    res.json({
+      status: "ok",
+      version: packageInfo.version, // from package.json, so it can't drift
+      environment,
+      startedAt: startedAt.toISOString(),
+      uptimeSeconds: Math.round(process.uptime()),
     });
   });
 
