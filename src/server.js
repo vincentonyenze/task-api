@@ -1,11 +1,18 @@
 import { createApp } from "./app.js";
 import { config } from "./config.js";
+import { createTaskStore } from "./models/taskStore.js";
+import { seed } from "./seed.js";
 
 // Starts the API: builds the app, listens on the port, and stops cleanly.
 // This is the file `npm start` runs. Everything about WHAT the API does is
 // in app.js; this file is only about RUNNING it.
 
-const app = createApp({ environment: config.environment });
+// Where the tasks live. In development, start with a few examples so
+// there's something to see.
+const store = createTaskStore();
+if (config.environment === "development") seed(store);
+
+const app = createApp({ environment: config.environment, store });
 
 // app.listen gives back the underlying Node HTTP server, which we need in
 // order to stop it later. A PORT is like a door number on this computer:

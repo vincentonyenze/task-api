@@ -2,6 +2,7 @@ import express from "express";
 // Importing a JSON file needs the "with { type: 'json' }" part (an import
 // ATTRIBUTE): it tells Node to read the file as data, never run it as code
 import packageInfo from "../package.json" with { type: "json" };
+import { createTaskStore } from "./models/taskStore.js";
 
 // Builds the Express application: its settings and routes. It does NOT
 // start listening: that's server.js's job.
@@ -14,7 +15,9 @@ import packageInfo from "../package.json" with { type: "json" };
 // fresh, separate app. Each test gets its own.
 //
 // options.environment: "development" turns on the learning aids (/echo)
-export function createApp({ environment = "development" } = {}) {
+// options.store: where tasks live. Given to the app (dependency injection
+// again), so each test can hand its app a fresh, empty store.
+export function createApp({ environment = "development", store = createTaskStore() } = {}) {
   const app = express();
 
   // Express adds "X-Powered-By: Express" to every response. It tells anyone
@@ -32,7 +35,7 @@ export function createApp({ environment = "development" } = {}) {
     // Content-Type header to application/json so the client knows what it is
     res.json({
       name: "Task API",
-      message: "Hello! This API will manage tasks. Try GET /tasks soon.",
+      message: "Hello! This API manages tasks. Try GET /tasks.",
     });
   });
 
@@ -53,6 +56,19 @@ export function createApp({ environment = "development" } = {}) {
       startedAt: startedAt.toISOString(),
       uptimeSeconds: Math.round(process.uptime()),
     });
+  });
+
+  // ===== Tasks =====
+
+  // GET /tasks  ->  every task
+  //
+  // The answer is wrapped: { data: [...], meta: {...} }, not a bare array.
+  // That leaves room to grow: pagination (Step 26) adds page details to
+  // meta, and clients reading "data" keep working. A bare array can't
+  // grow without breaking every client.
+  app.get("/tasks", (req, res) => {
+    const tasks = store.list();
+    res.json({ data: tasks, meta: { total: tasks.length } });
   });
 
   // A learning aid: answers ANY method on /echo with what it received.
