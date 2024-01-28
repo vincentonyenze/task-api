@@ -71,6 +71,27 @@ export function createApp({ environment = "development", store = createTaskStore
     res.json({ data: tasks, meta: { total: tasks.length } });
   });
 
+  // GET /tasks/:id  ->  one task
+  //
+  // ":id" is a ROUTE PARAMETER: it matches whatever is in that part of the
+  // address, and Express puts it in req.params. On /tasks/abc-123,
+  // req.params.id is "abc-123". (Like :courseId in React Router.)
+  app.get("/tasks/:id", (req, res) => {
+    const task = store.get(req.params.id);
+
+    if (!task) {
+      // 404 Not Found: the address is fine, but there's no such task.
+      // Answered in JSON like everything else, with a "code" for programs
+      // and a "message" for people. (Step 21 moves this into one place.)
+      return res.status(404).json({
+        error: { code: "NOT_FOUND", message: `There's no task with the id "${req.params.id}".` },
+      });
+    }
+
+    // 200 OK is the default status, so it doesn't need setting
+    res.json({ data: task });
+  });
+
   // A learning aid: answers ANY method on /echo with what it received.
   // Only in development: a real API shouldn't show visitors its headers.
   // app.all matches every method (GET, POST, PATCH, DELETE...).
