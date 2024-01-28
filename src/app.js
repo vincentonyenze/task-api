@@ -25,6 +25,12 @@ export function createApp({ environment = "development", store = createTaskStore
   // weaknesses), and helps nobody else. Switch it off.
   app.disable("x-powered-by");
 
+  // MIDDLEWARE: code that runs on requests BEFORE the routes do (more in
+  // Step 19). express.json() reads the request's body and, if the client
+  // said it's JSON (Content-Type: application/json), turns it into an
+  // object at req.body. Without it, routes can't see what was sent.
+  app.use(express.json());
+
   // GET /  ->  a small JSON welcome
   //
   // Express calls the handler with two objects:
@@ -90,6 +96,30 @@ export function createApp({ environment = "development", store = createTaskStore
 
     // 200 OK is the default status, so it doesn't need setting
     res.json({ data: task });
+  });
+
+  // POST /tasks  ->  create a task from the JSON body
+  //
+  //   curl -X POST http://localhost:3000/tasks   //     -H "Content-Type: application/json" -d '{"title": "Buy milk"}'
+  app.post("/tasks", (req, res) => {
+    // Express 5: req.body stays undefined unless a body parser read one.
+    // That happens when the body is missing, or isn't marked as JSON.
+    // (Steps 12-13 check the CONTENTS properly; this only checks there IS
+    // a JSON object to look at.)
+    if (typeof req.body !== "object" || req.body === null || Array.isArray(req.body)) {
+      return res.status(400).json({
+        error: {
+          code: "INVALID_BODY",
+          message: 'Send the task as a JSON object, with the header "Content-Type: application/json".',
+        },
+      });
+    }
+
+    const task = store.create(req.body);
+
+    // 201 Created: something new exists now. Location says WHERE: the
+    // address to GET it from. Clients (and people) can follow it.
+    res.status(201).location(`/tasks/${task.id}`).json({ data: task });
   });
 
   // A learning aid: answers ANY method on /echo with what it received.
