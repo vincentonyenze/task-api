@@ -3,6 +3,7 @@ import express from "express";
 // ATTRIBUTE): it tells Node to read the file as data, never run it as code
 import packageInfo from "../package.json" with { type: "json" };
 import { createTaskStore } from "./models/taskStore.js";
+import { validateTask } from "./validation/taskValidation.js";
 
 // Builds the Express application: its settings and routes. It does NOT
 // start listening: that's server.js's job.
@@ -102,20 +103,35 @@ export function createApp({ environment = "development", store = createTaskStore
   //
   //   curl -X POST http://localhost:3000/tasks   //     -H "Content-Type: application/json" -d '{"title": "Buy milk"}'
   app.post("/tasks", (req, res) => {
-    // Express 5: req.body stays undefined unless a body parser read one.
-    // That happens when the body is missing, or isn't marked as JSON.
-    // (Steps 12-13 check the CONTENTS properly; this only checks there IS
-    // a JSON object to look at.)
-    if (typeof req.body !== "object" || req.body === null || Array.isArray(req.body)) {
+    // Express 5: req.body stays undefined when no JSON was read: no body,
+    // or the Content-Type header is missing. Say exactly that, since it's
+    // the most common mistake when trying an API with curl.
+    // (Step 29 turns the "wrong Content-Type" case into a 415.)
+    if (req.body === undefined) {
       return res.status(400).json({
         error: {
           code: "INVALID_BODY",
-          message: 'Send the task as a JSON object, with the header "Content-Type: application/json".',
+          message: 'Send the task as JSON, with the header "Content-Type: application/json".',
         },
       });
     }
 
-    const task = store.create(req.body);
+    // Check EVERYTHING that was sent (Step 12's rules)
+    const { value, errors } = validateTask(req.body);
+    if (errors.length > 0) {
+      // 400 Bad Request: the request itself is wrong, and sending it again
+      // unchanged won't help. "details" lists every problem, by field.
+      return res.status(400).json({
+        error: {
+          code: "VALIDATION_FAILED",
+          message: errors.length === 1 ? "The task has a problem." : `The task has ${errors.length} problems.`,
+          details: errors,
+        },
+      });
+    }
+
+    // Only the CLEANED values reach the store (trimmed, checked)
+    const task = store.create(value);
 
     // 201 Created: something new exists now. Location says WHERE: the
     // address to GET it from. Clients (and people) can follow it.
