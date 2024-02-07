@@ -5,6 +5,39 @@ import packageInfo from "../package.json" with { type: "json" };
 import { createTaskStore } from "./models/taskStore.js";
 import { validateTask } from "./validation/taskValidation.js";
 
+// ===== Answers shared by several routes =====
+// (Step 21 replaces these with one central error handler.)
+
+// 404 for a task id that doesn't exist
+function sendTaskNotFound(res, id) {
+  return res.status(404).json({
+    error: { code: "NOT_FOUND", message: `There's no task with the id "${id}".` },
+  });
+}
+
+// Express 5: req.body stays undefined when no JSON was read: no body, or
+// the Content-Type header is missing. Answers 400 and returns true if so.
+// (Step 29 turns the "wrong Content-Type" case into a 415.)
+function rejectMissingBody(req, res) {
+  if (req.body !== undefined) return false;
+  res.status(400).json({
+    error: { code: "INVALID_BODY", message: 'Send the task as JSON, with the header "Content-Type: application/json".' },
+  });
+  return true;
+}
+
+// 400 Bad Request: the request itself is wrong, and sending it again
+// unchanged won't help. "details" lists every problem, by field.
+function sendValidationErrors(res, errors) {
+  return res.status(400).json({
+    error: {
+      code: "VALIDATION_FAILED",
+      message: errors.length === 1 ? "The task has a problem." : `The task has ${errors.length} problems.`,
+      details: errors,
+    },
+  });
+}
+
 // Builds the Express application: its settings and routes. It does NOT
 // start listening: that's server.js's job.
 //
@@ -86,14 +119,10 @@ export function createApp({ environment = "development", store = createTaskStore
   app.get("/tasks/:id", (req, res) => {
     const task = store.get(req.params.id);
 
-    if (!task) {
-      // 404 Not Found: the address is fine, but there's no such task.
-      // Answered in JSON like everything else, with a "code" for programs
-      // and a "message" for people. (Step 21 moves this into one place.)
-      return res.status(404).json({
-        error: { code: "NOT_FOUND", message: `There's no task with the id "${req.params.id}".` },
-      });
-    }
+    // 404 Not Found: the address is fine, but there's no such task.
+    // Answered in JSON like everything else, with a "code" for programs
+    // and a "message" for people.
+    if (!task) return sendTaskNotFound(res, req.params.id);
 
     // 200 OK is the default status, so it doesn't need setting
     res.json({ data: task });
@@ -103,32 +132,11 @@ export function createApp({ environment = "development", store = createTaskStore
   //
   //   curl -X POST http://localhost:3000/tasks   //     -H "Content-Type: application/json" -d '{"title": "Buy milk"}'
   app.post("/tasks", (req, res) => {
-    // Express 5: req.body stays undefined when no JSON was read: no body,
-    // or the Content-Type header is missing. Say exactly that, since it's
-    // the most common mistake when trying an API with curl.
-    // (Step 29 turns the "wrong Content-Type" case into a 415.)
-    if (req.body === undefined) {
-      return res.status(400).json({
-        error: {
-          code: "INVALID_BODY",
-          message: 'Send the task as JSON, with the header "Content-Type: application/json".',
-        },
-      });
-    }
+    if (rejectMissingBody(req, res)) return;
 
     // Check EVERYTHING that was sent (Step 12's rules)
     const { value, errors } = validateTask(req.body);
-    if (errors.length > 0) {
-      // 400 Bad Request: the request itself is wrong, and sending it again
-      // unchanged won't help. "details" lists every problem, by field.
-      return res.status(400).json({
-        error: {
-          code: "VALIDATION_FAILED",
-          message: errors.length === 1 ? "The task has a problem." : `The task has ${errors.length} problems.`,
-          details: errors,
-        },
-      });
-    }
+    if (errors.length > 0) return sendValidationErrors(res, errors);
 
     // Only the CLEANED values reach the store (trimmed, checked)
     const task = store.create(value);
@@ -136,6 +144,26 @@ export function createApp({ environment = "development", store = createTaskStore
     // 201 Created: something new exists now. Location says WHERE: the
     // address to GET it from. Clients (and people) can follow it.
     res.status(201).location(`/tasks/${task.id}`).json({ data: task });
+  });
+
+  // PATCH /tasks/:id  ->  change SOME fields of a task
+  //
+  //   curl -X PATCH http://localhost:3000/tasks/<id>   //     -H "Content-Type: application/json" -d '{"status": "done"}'
+  //
+  // Only the fields sent change; everything else stays as it was.
+  app.patch("/tasks/:id", (req, res) => {
+    if (rejectMissingBody(req, res)) return;
+
+    // No such task: 404, whatever the body says
+    if (!store.get(req.params.id)) return sendTaskNotFound(res, req.params.id);
+
+    // partial: nothing is required, but whatever is sent must be valid
+    const { value, errors } = validateTask(req.body, { partial: true });
+    if (errors.length > 0) return sendValidationErrors(res, errors);
+
+    // 200 OK with the whole updated task, so the client doesn't need a
+    // second request to see the result (updatedAt, for example)
+    res.json({ data: store.update(req.params.id, value) });
   });
 
   // A learning aid: answers ANY method on /echo with what it received.
