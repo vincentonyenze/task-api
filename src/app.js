@@ -187,6 +187,19 @@ export function createApp({ environment = "development", store = createTaskStore
     res.json({ data: store.replace(req.params.id, value) });
   });
 
+  // DELETE /tasks/:id  ->  delete a task
+  //
+  // 204 No Content: it worked, and there's nothing to send back (the task
+  // is gone). A 204 response has NO body at all.
+  //
+  // Deleting the same task twice: the second time it's already gone, so
+  // 404. The END STATE is the same either way (no such task), which is why
+  // DELETE still counts as idempotent: safe to retry.
+  app.delete("/tasks/:id", (req, res) => {
+    if (!store.remove(req.params.id)) return sendTaskNotFound(res, req.params.id);
+    res.status(204).end(); // end(): send the response with no body
+  });
+
   // A learning aid: answers ANY method on /echo with what it received.
   // Only in development: a real API shouldn't show visitors its headers.
   // app.all matches every method (GET, POST, PATCH, DELETE...).
