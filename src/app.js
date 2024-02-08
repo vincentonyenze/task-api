@@ -166,6 +166,27 @@ export function createApp({ environment = "development", store = createTaskStore
     res.json({ data: store.update(req.params.id, value) });
   });
 
+  // PUT /tasks/:id  ->  REPLACE a whole task
+  //
+  // The body is the complete new version. Anything left out goes back to
+  // its default: PUT {"title": "x"} also resets priority, status, the
+  // description and the due date. (PATCH {"title": "x"} changes only the
+  // title.) id and createdAt never change.
+  //
+  // PUT here only replaces tasks that exist: 404 otherwise. Some APIs let
+  // PUT create a task at an id the client chose; this one doesn't, because
+  // ids belong to the server (Step 7).
+  app.put("/tasks/:id", (req, res) => {
+    if (rejectMissingBody(req, res)) return;
+    if (!store.get(req.params.id)) return sendTaskNotFound(res, req.params.id);
+
+    // Not partial: it's a whole task, so the title is required
+    const { value, errors } = validateTask(req.body);
+    if (errors.length > 0) return sendValidationErrors(res, errors);
+
+    res.json({ data: store.replace(req.params.id, value) });
+  });
+
   // A learning aid: answers ANY method on /echo with what it received.
   // Only in development: a real API shouldn't show visitors its headers.
   // app.all matches every method (GET, POST, PATCH, DELETE...).
