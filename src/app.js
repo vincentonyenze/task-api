@@ -2,6 +2,7 @@ import express from "express";
 // Importing a JSON file needs the "with { type: 'json' }" part (an import
 // ATTRIBUTE): it tells Node to read the file as data, never run it as code
 import packageInfo from "../package.json" with { type: "json" };
+import { createRequestLogger } from "./middleware/requestLogger.js";
 import { createTaskStore } from "./models/taskStore.js";
 import { createTasksRouter } from "./routes/tasks.js";
 
@@ -18,13 +19,24 @@ import { createTasksRouter } from "./routes/tasks.js";
 // options.environment: "development" turns on the learning aids (/echo)
 // options.store: where tasks live. Given to the app (dependency injection
 // again), so each test can hand its app a fresh, empty store.
-export function createApp({ environment = "development", store = createTaskStore() } = {}) {
+// options.log: where the request log goes. Off in tests (so test output
+// stays readable) unless a test passes its own function to collect lines.
+export function createApp({
+  environment = "development",
+  store = createTaskStore(),
+  log = environment === "test" ? null : console.log,
+} = {}) {
   const app = express();
 
   // Express adds "X-Powered-By: Express" to every response. It tells anyone
   // probing the server what software it runs (useful for finding known
   // weaknesses), and helps nobody else. Switch it off.
   app.disable("x-powered-by");
+
+  // ORDER MATTERS: middleware runs in the order it's added, top to bottom.
+  // The logger goes FIRST, so it sees every request, even ones a later
+  // step rejects (like broken JSON in express.json()).
+  if (log) app.use(createRequestLogger({ log }));
 
   // MIDDLEWARE: code that runs on requests BEFORE the routes do (more in
   // Step 19). express.json() reads the request's body and, if the client
