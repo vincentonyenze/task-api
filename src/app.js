@@ -2,6 +2,7 @@ import express from "express";
 // Importing a JSON file needs the "with { type: 'json' }" part (an import
 // ATTRIBUTE): it tells Node to read the file as data, never run it as code
 import packageInfo from "../package.json" with { type: "json" };
+import { createRequestId } from "./middleware/requestId.js";
 import { createRequestLogger } from "./middleware/requestLogger.js";
 import { createTaskStore } from "./models/taskStore.js";
 import { createTasksRouter } from "./routes/tasks.js";
@@ -34,8 +35,10 @@ export function createApp({
   app.disable("x-powered-by");
 
   // ORDER MATTERS: middleware runs in the order it's added, top to bottom.
-  // The logger goes FIRST, so it sees every request, even ones a later
-  // step rejects (like broken JSON in express.json()).
+  //   1. request id: first, so everything after can use req.id
+  //   2. logger: early, so it sees every request, even ones a later step
+  //      rejects (like broken JSON in express.json())
+  app.use(createRequestId());
   if (log) app.use(createRequestLogger({ log }));
 
   // MIDDLEWARE: code that runs on requests BEFORE the routes do (more in

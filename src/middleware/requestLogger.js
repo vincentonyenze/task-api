@@ -7,7 +7,9 @@
 // Forgetting next() (and not answering) leaves the request hanging forever.
 //
 // This one logs every request, AFTER it's answered, as one line:
-//   GET /tasks 200 1.4ms
+//   GET /tasks 200 1.4ms [7f3a9c2e-…]
+// The [id] at the end is the request id (requestId.js), so a request a
+// client asks about can be found exactly.
 //
 // log: where lines go. console.log normally; tests can pass their own
 // function to collect the lines (dependency injection again).
@@ -24,13 +26,15 @@ export function createRequestLogger({ log = console.log } = {}) {
       const milliseconds = Number(process.hrtime.bigint() - start) / 1_000_000;
       // originalUrl: the full address as requested, query string included
       // (req.url inside a mounted router is only the part after the mount)
-      log(`${req.method} ${req.originalUrl} ${res.statusCode} ${milliseconds.toFixed(1)}ms`);
+      log(`${req.method} ${req.originalUrl} ${res.statusCode} ${milliseconds.toFixed(1)}ms [${req.id}]`);
     });
 
     // "close" without "finish": the connection ended before an answer was
     // sent (the client gave up, or the network dropped). Worth knowing.
     res.on("close", () => {
-      if (!res.writableFinished) log(`${req.method} ${req.originalUrl} (client disconnected before the answer)`);
+      if (!res.writableFinished) {
+        log(`${req.method} ${req.originalUrl} (client disconnected before the answer) [${req.id}]`);
+      }
     });
 
     next(); // on to the next middleware or route
