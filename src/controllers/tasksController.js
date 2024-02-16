@@ -1,4 +1,4 @@
-import { rejectMissingBody, sendTaskNotFound, sendValidationErrors } from "../http/responses.js";
+import { invalidBody, taskNotFound, validationFailed } from "../http/errors.js";
 import { validateTask } from "../validation/taskValidation.js";
 
 // WHAT HAPPENS for each task request: the "controller".
@@ -6,84 +6,81 @@ import { validateTask } from "../validation/taskValidation.js";
 // Each handler does the same three things:
 //   1. read the request (params, body)
 //   2. ask for the work to be done (validation, the store)
-//   3. choose the answer (status code + JSON)
-// It decides nothing about URLs: routes/tasks.js maps URLs to these.
+//   3. answer: on success, send the result; on a problem, THROW an error
+//      (http/errors.js) and let the central error handler answer
 //
-// The layers so far, each knowing only about the next:
+// The layers, each knowing only about the next:
 //   routes      -> which URL + method goes to which handler
 //   controllers -> HTTP in, HTTP out (this file)
 //   validation  -> what's allowed
 //   models      -> the data and its rules
+
+// Express 5: req.body stays undefined when no JSON was read: no body, or
+// the Content-Type header is missing. (Step 29 makes the second a 415.)
+function requireBody(req) {
+  if (req.body === undefined) {
+    throw invalidBody('Send the task as JSON, with the header "Content-Type: application/json".');
+  }
+}
+
+// The task, or a 404 if there's no such id
+function findTask(store, id) {
+  const task = store.get(id);
+  if (!task) throw taskNotFound(id);
+  return task;
+}
+
+// Checked, cleaned values, or a 400 listing every problem
+function checkTask(body, options) {
+  const { value, errors } = validateTask(body, options);
+  if (errors.length > 0) throw validationFailed(errors);
+  return value;
+}
+
 export function createTasksController({ store }) {
   return {
-    // GET /tasks  ->  every task
-    //
-    // The answer is wrapped: { data: [...], meta: {...} }, not a bare array.
-    // That leaves room to grow: pagination (Step 26) adds page details to
-    // meta, and clients reading "data" keep working.
+    // GET /tasks  ->  every task, wrapped as { data, meta } so meta can grow
     list(req, res) {
       const tasks = store.list();
       res.json({ data: tasks, meta: { total: tasks.length } });
     },
 
-    // GET /tasks/:id  ->  one task, or 404 Not Found
-    //
-    // req.params.id comes from the ":id" in the route's path
+    // GET /tasks/:id  ->  one task (findTask throws the 404)
     getOne(req, res) {
-      const task = store.get(req.params.id);
-      if (!task) return sendTaskNotFound(res, req.params.id);
-      res.json({ data: task }); // 200 OK is the default
+      res.json({ data: findTask(store, req.params.id) });
     },
 
-    // POST /tasks  ->  create a task from the JSON body
+    // POST /tasks  ->  201 Created + Location, with the new task
     create(req, res) {
-      if (rejectMissingBody(req, res)) return;
-
-      // Check EVERYTHING that was sent (Step 12's rules)
-      const { value, errors } = validateTask(req.body);
-      if (errors.length > 0) return sendValidationErrors(res, errors);
-
+      requireBody(req);
       // Only the CLEANED values reach the store (trimmed, checked)
-      const task = store.create(value);
-
-      // 201 Created + Location: where the new task lives. req.baseUrl is
-      // where the router is mounted ("/tasks").
+      const task = store.create(checkTask(req.body));
       res.status(201).location(`${req.baseUrl}/${task.id}`).json({ data: task });
     },
 
-    // PATCH /tasks/:id  ->  change SOME fields; the rest stay as they were
+    // PATCH /tasks/:id  ->  change SOME fields; the rest stay as they were.
+    // The checks run in order, and the first problem found is the answer:
+    // no body (400), no such task (404), invalid change (400).
     update(req, res) {
-      if (rejectMissingBody(req, res)) return;
-      if (!store.get(req.params.id)) return sendTaskNotFound(res, req.params.id);
-
-      // partial: nothing is required, but whatever is sent must be valid
-      const { value, errors } = validateTask(req.body, { partial: true });
-      if (errors.length > 0) return sendValidationErrors(res, errors);
-
-      // 200 with the whole updated task, so no second request is needed
-      res.json({ data: store.update(req.params.id, value) });
+      requireBody(req);
+      findTask(store, req.params.id);
+      const changes = checkTask(req.body, { partial: true });
+      res.json({ data: store.update(req.params.id, changes) });
     },
 
-    // PUT /tasks/:id  ->  REPLACE a whole task
-    //
-    // Anything left out goes back to its default (PATCH would keep it).
-    // Only replaces tasks that exist: ids belong to the server (Step 7).
+    // PUT /tasks/:id  ->  REPLACE a whole task (anything left out goes back
+    // to its default). Only replaces tasks that exist.
     replace(req, res) {
-      if (rejectMissingBody(req, res)) return;
-      if (!store.get(req.params.id)) return sendTaskNotFound(res, req.params.id);
-
-      // Not partial: a whole task, so the title is required
-      const { value, errors } = validateTask(req.body);
-      if (errors.length > 0) return sendValidationErrors(res, errors);
-
-      res.json({ data: store.replace(req.params.id, value) });
+      requireBody(req);
+      findTask(store, req.params.id);
+      const task = checkTask(req.body); // a whole task: title required
+      res.json({ data: store.replace(req.params.id, task) });
     },
 
-    // DELETE /tasks/:id  ->  204 No Content, or 404 if it's already gone.
-    // Either way the task doesn't exist afterwards: safe to retry.
+    // DELETE /tasks/:id  ->  204 No Content, or 404 if it's already gone
     remove(req, res) {
-      if (!store.remove(req.params.id)) return sendTaskNotFound(res, req.params.id);
-      res.status(204).end(); // no body at all
+      if (!store.remove(req.params.id)) throw taskNotFound(req.params.id);
+      res.status(204).end();
     },
   };
 }

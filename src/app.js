@@ -2,6 +2,7 @@ import express from "express";
 // Importing a JSON file needs the "with { type: 'json' }" part (an import
 // ATTRIBUTE): it tells Node to read the file as data, never run it as code
 import packageInfo from "../package.json" with { type: "json" };
+import { createErrorHandler } from "./middleware/errorHandler.js";
 import { createRequestId } from "./middleware/requestId.js";
 import { createRequestLogger } from "./middleware/requestLogger.js";
 import { createTaskStore } from "./models/taskStore.js";
@@ -22,10 +23,12 @@ import { createTasksRouter } from "./routes/tasks.js";
 // again), so each test can hand its app a fresh, empty store.
 // options.log: where the request log goes. Off in tests (so test output
 // stays readable) unless a test passes its own function to collect lines.
+// options.logError: where unexpected errors (bugs) are reported
 export function createApp({
   environment = "development",
   store = createTaskStore(),
   log = environment === "test" ? null : console.log,
+  logError = console.error,
 } = {}) {
   const app = express();
 
@@ -104,6 +107,10 @@ export function createApp({
       });
     });
   }
+
+  // LAST: the error handler. Any error thrown above (or passed to
+  // next(error)) ends up here and becomes a JSON answer.
+  app.use(createErrorHandler({ logError }));
 
   return app;
 }
