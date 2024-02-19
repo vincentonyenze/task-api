@@ -12,12 +12,15 @@ export class HttpError extends Error {
   // code:    a fixed, machine-readable name ("NOT_FOUND") that never changes
   // message: for people; can be reworded any time
   // details: optional extra information (e.g. which fields are wrong)
-  constructor(status, code, message, details) {
+  // headers: optional response headers that belong with this error
+  //          (405 must say which methods ARE allowed)
+  constructor(status, code, message, details, headers = {}) {
     super(message);
     this.name = "HttpError";
     this.status = status;
     this.code = code;
     this.details = details;
+    this.headers = headers;
   }
 }
 
@@ -25,6 +28,23 @@ export class HttpError extends Error {
 
 export function notFound(message) {
   return new HttpError(404, "NOT_FOUND", message);
+}
+
+// No route at all for this address
+export function routeNotFound(req) {
+  return notFound(`There's nothing at ${req.method} ${req.path}.`);
+}
+
+// 405: the address exists, but not with this method. The Allow header is
+// REQUIRED with a 405: it tells the client what it could do instead.
+export function methodNotAllowed(req, allowed) {
+  return new HttpError(
+    405,
+    "METHOD_NOT_ALLOWED",
+    `${req.method} isn't allowed on ${req.originalUrl.split("?")[0]}. Allowed: ${allowed.join(", ")}.`,
+    undefined,
+    { Allow: allowed.join(", ") }
+  );
 }
 
 export function taskNotFound(id) {

@@ -1,5 +1,6 @@
 import express from "express";
 import { createTasksController } from "../controllers/tasksController.js";
+import { allowOnly } from "../middleware/allowMethods.js";
 
 // Every /tasks route: WHICH URL + method goes to which handler. That's all.
 // What each one DOES is in controllers/tasksController.js.
@@ -17,12 +18,21 @@ export function createTasksRouter({ store }) {
   const router = express.Router();
   const tasks = createTasksController({ store });
 
-  router.get("/", tasks.list); //            GET    /tasks      every task
-  router.post("/", tasks.create); //         POST   /tasks      create one
-  router.get("/:id", tasks.getOne); //       GET    /tasks/:id  one task
-  router.patch("/:id", tasks.update); //     PATCH  /tasks/:id  change some fields
-  router.put("/:id", tasks.replace); //      PUT    /tasks/:id  replace it
-  router.delete("/:id", tasks.remove); //    DELETE /tasks/:id  delete it
+  // router.route(path) groups every method for ONE address. The final
+  // .all() catches any other method: 405 Method Not Allowed.
+  router
+    .route("/")
+    .get(tasks.list) //                 GET    /tasks      every task
+    .post(tasks.create) //              POST   /tasks      create one
+    .all(allowOnly("GET", "POST"));
+
+  router
+    .route("/:id")
+    .get(tasks.getOne) //               GET    /tasks/:id  one task
+    .patch(tasks.update) //             PATCH  /tasks/:id  change some fields
+    .put(tasks.replace) //              PUT    /tasks/:id  replace it
+    .delete(tasks.remove) //            DELETE /tasks/:id  delete it
+    .all(allowOnly("GET", "PATCH", "PUT", "DELETE"));
 
   return router;
 }

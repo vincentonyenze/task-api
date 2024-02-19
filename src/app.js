@@ -2,6 +2,8 @@ import express from "express";
 // Importing a JSON file needs the "with { type: 'json' }" part (an import
 // ATTRIBUTE): it tells Node to read the file as data, never run it as code
 import packageInfo from "../package.json" with { type: "json" };
+import { routeNotFound } from "./http/errors.js";
+import { allowOnly } from "./middleware/allowMethods.js";
 import { createErrorHandler } from "./middleware/errorHandler.js";
 import { createRequestId } from "./middleware/requestId.js";
 import { createRequestLogger } from "./middleware/requestLogger.js";
@@ -55,14 +57,19 @@ export function createApp({
   // Express calls the handler with two objects:
   //   req (request):  what the client sent: method, path, headers, body...
   //   res (response): what we send back
-  app.get("/", (req, res) => {
-    // res.json() turns the object into JSON text, and sets the
-    // Content-Type header to application/json so the client knows what it is
-    res.json({
-      name: "Task API",
-      message: "Hello! This API manages tasks. Try GET /tasks.",
-    });
-  });
+  // app.route(): every method for one address. Only GET (and HEAD) here;
+  // the final .all() answers anything else with 405 Method Not Allowed.
+  app
+    .route("/")
+    .get((req, res) => {
+      // res.json() turns the object into JSON text, and sets the
+      // Content-Type header to application/json so the client knows what it is
+      res.json({
+        name: "Task API",
+        message: "Hello! This API manages tasks. Try GET /tasks.",
+      });
+    })
+    .all(allowOnly("GET"));
 
   // GET /health  ->  "I'm alive", with a few facts about this server.
   //
@@ -71,17 +78,20 @@ export function createApp({
   // you check which version is actually running. It must be FAST and never
   // fail for a silly reason, so it does as little as possible.
   const startedAt = new Date();
-  app.get("/health", (req, res) => {
-    // Never cached: an old "ok" saved by some proxy would be worse than useless
-    res.set("Cache-Control", "no-store");
-    res.json({
-      status: "ok",
-      version: packageInfo.version, // from package.json, so it can't drift
-      environment,
-      startedAt: startedAt.toISOString(),
-      uptimeSeconds: Math.round(process.uptime()),
-    });
-  });
+  app
+    .route("/health")
+    .get((req, res) => {
+      // Never cached: an old "ok" saved by some proxy would be worse than useless
+      res.set("Cache-Control", "no-store");
+      res.json({
+        status: "ok",
+        version: packageInfo.version, // from package.json, so it can't drift
+        environment,
+        startedAt: startedAt.toISOString(),
+        uptimeSeconds: Math.round(process.uptime()),
+      });
+    })
+    .all(allowOnly("GET"));
 
   // ===== Tasks =====
   // Every /tasks route lives in routes/tasks.js. app.use() MOUNTS the
@@ -107,6 +117,10 @@ export function createApp({
       });
     });
   }
+
+  // No route matched: a 404 in JSON (instead of Express's HTML page).
+  // Placed after every route, so it only runs when nothing else answered.
+  app.use((req, res, next) => next(routeNotFound(req)));
 
   // LAST: the error handler. Any error thrown above (or passed to
   // next(error)) ends up here and becomes a JSON answer.

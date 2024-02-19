@@ -38,6 +38,7 @@ export function createErrorHandler({ logError = console.error } = {}) {
     if (error instanceof HttpError) {
       status = error.status;
       body = { code: error.code, message: error.message, details: error.details };
+      res.set(error.headers); // e.g. Allow, for a 405
     } else if (error.type === "entity.parse.failed") {
       // express.json() couldn't read the body: it isn't valid JSON
       status = 400;
