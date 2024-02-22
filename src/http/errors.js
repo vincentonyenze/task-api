@@ -55,6 +55,12 @@ export function invalidBody(message) {
   return new HttpError(400, "INVALID_BODY", message);
 }
 
+// 400 for a query string that can't be used (?status=finished)
+export function invalidQuery(errors) {
+  const message = errors.length === 1 ? "The query has a problem." : `The query has ${errors.length} problems.`;
+  return new HttpError(400, "INVALID_QUERY", message, errors);
+}
+
 // 400 with every validation problem, by field (Step 12's errors)
 export function validationFailed(errors) {
   const message = errors.length === 1 ? "The task has a problem." : `The task has ${errors.length} problems.`;

@@ -15,8 +15,9 @@ export const DESCRIPTION_MAX = 2000;
 // as they got it (say, for PUT), so these are quietly ignored, not errors.
 const SERVER_FIELDS = new Set(["id", "createdAt", "updatedAt"]);
 
-// "2026-11-15": the right shape AND a real day (no 2026-02-30)
-function isRealDate(value) {
+// "2026-11-15": the right shape AND a real day (no 2026-02-30).
+// Exported: the query checks (taskQuery.js) use it too.
+export function isRealDate(value) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const [year, month, day] = value.split("-").map(Number);
   const date = new Date(Date.UTC(year, month - 1, day));

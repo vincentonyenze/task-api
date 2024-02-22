@@ -1,4 +1,6 @@
-import { invalidBody, taskNotFound, validationFailed } from "../http/errors.js";
+import { invalidBody, invalidQuery, taskNotFound, validationFailed } from "../http/errors.js";
+import { filterTasks } from "../models/taskFilters.js";
+import { parseTaskQuery } from "../validation/taskQuery.js";
 import { validateTask } from "../validation/taskValidation.js";
 
 // WHAT HAPPENS for each task request: the "controller".
@@ -39,9 +41,14 @@ function checkTask(body, options) {
 
 export function createTasksController({ store }) {
   return {
-    // GET /tasks  ->  every task, wrapped as { data, meta } so meta can grow
+    // GET /tasks  ->  every task, or those matching the filters:
+    //   ?status=todo,in_progress  ?priority=high  ?dueBefore=2026-11-30
+    // Wrapped as { data, meta }, so meta can grow (Step 26).
     list(req, res) {
-      const tasks = store.list();
+      const { value: filters, errors } = parseTaskQuery(req.query);
+      if (errors.length > 0) throw invalidQuery(errors);
+
+      const tasks = filterTasks(store.list(), filters);
       res.json({ data: tasks, meta: { total: tasks.length } });
     },
 
