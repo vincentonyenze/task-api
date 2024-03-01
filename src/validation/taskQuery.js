@@ -10,8 +10,18 @@ import { isRealDate } from "./taskValidation.js";
 //
 // Every query value arrives as TEXT: ?limit=5 gives "5", not 5.
 
-// Each parameter the list understands. Steps 24-26 add q, sort, page, limit.
+export const SEARCH_MAX = 100;
+
+// Each parameter the list understands. Steps 25-26 add sort, page, limit.
 const PARAMETERS = {
+  // Search words: ?q=report q3. An EMPTY q means "no search" (search
+  // boxes often send q= when nothing was typed), so it isn't an error.
+  q: (raw) => {
+    if (typeof raw !== "string") return { error: "q must be given once, as text" };
+    const words = raw.trim();
+    if (words.length > SEARCH_MAX) return { error: `q must be ${SEARCH_MAX} characters or fewer` };
+    return { value: words };
+  },
   // One status, or several separated by commas: ?status=todo,in_progress
   status: (raw) => oneOrMore(raw, TASK_STATUSES, "status"),
   priority: (raw) => oneOrMore(raw, TASK_PRIORITIES, "priority"),
@@ -46,14 +56,14 @@ export function parseTaskQuery(query) {
   const value = {};
   const errors = [];
   for (const [name, raw] of Object.entries(query)) {
-    const parse = PARAMETERS[name];
+    const parse = Object.hasOwn(PARAMETERS, name) ? PARAMETERS[name] : undefined;
     if (!parse) {
       errors.push({ field: name, message: `"${name}" isn't something tasks can be filtered by` });
       continue;
     }
     const result = parse(raw);
     if (result.error) errors.push({ field: name, message: result.error });
-    else value[name] = result.value;
+    else if (result.value !== "") value[name] = result.value; // empty q: no search
   }
   return { value, errors };
 }

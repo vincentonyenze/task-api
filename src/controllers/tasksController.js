@@ -42,7 +42,7 @@ function checkTask(body, options) {
 export function createTasksController({ store }) {
   return {
     // GET /tasks  ->  every task, or those matching the filters:
-    //   ?status=todo,in_progress  ?priority=high  ?dueBefore=2026-11-30
+    //   ?q=report q3  ?status=todo,in_progress  ?priority=high  ?dueBefore=2026-11-30
     // Wrapped as { data, meta }, so meta can grow (Step 26).
     list(req, res) {
       const { value: filters, errors } = parseTaskQuery(req.query);

@@ -82,3 +82,62 @@ describe("filterTasks", () => {
     assert.equal(tasks.length, 4);
   });
 });
+
+describe("search (q)", () => {
+  const tasks = [
+    { title: "Write the Q3 report", description: "", status: "todo", priority: "high", dueDate: null },
+    { title: "Buy milk", description: "Oat milk from the café", status: "todo", priority: "low", dueDate: null },
+    { title: "Report a bug", description: "", status: "done", priority: "medium", dueDate: null },
+  ];
+  const titles = (query) => filterTasks(tasks, parseTaskQuery(query).value).map((task) => task.title);
+
+  it("finds every word, in any order, ignoring case", () => {
+    assert.deepEqual(titles({ q: "REPORT q3" }), ["Write the Q3 report"]);
+    assert.deepEqual(titles({ q: "report" }), ["Write the Q3 report", "Report a bug"]);
+  });
+
+  it("looks in the description too, and ignores accents", () => {
+    assert.deepEqual(titles({ q: "cafe" }), ["Buy milk"]);
+    assert.deepEqual(titles({ q: "CAFÉ oat" }), ["Buy milk"]);
+  });
+
+  it("combines with the other filters", () => {
+    assert.deepEqual(titles({ q: "report", status: "done" }), ["Report a bug"]);
+  });
+
+  it("treats an empty search as no search", () => {
+    assert.deepEqual(parseTaskQuery({ q: "   " }), { value: {}, errors: [] });
+    assert.equal(titles({ q: "" }).length, 3);
+  });
+
+  it("rejects a search that's too long, or given twice", () => {
+    assert.deepEqual(fields({ q: "x".repeat(101) }), ["q"]);
+    assert.deepEqual(fields({ q: "x".repeat(100) }), []);
+    assert.deepEqual(fields({ q: ["milk", "report"] }), ["q"]);
+  });
+
+  it("can find nothing", () => {
+    assert.deepEqual(titles({ q: "holiday" }), []);
+  });
+});
+
+describe("parameter names", () => {
+  // Every object inherits names like toString and constructor. A plain
+  // PARAMETERS[name] lookup would find them and treat them as parameters.
+  it("doesn't mistake built-in object names for parameters", () => {
+    assert.deepEqual(fields({ toString: "x" }), ["toString"]);
+    assert.deepEqual(fields({ constructor: "x", __proto__: "x" }), ["constructor"]);
+  });
+});
+
+describe("search words", () => {
+  // Words containing "s", and extra spaces: these would break if the words
+  // were split on anything other than whitespace
+  it("splits the search on spaces only", () => {
+    const tasks = [{ title: "Read about HTTP status codes", description: "", status: "todo", priority: "low", dueDate: null }];
+    const found = (q) => filterTasks(tasks, { q }).length;
+    assert.equal(found("status codes"), 1);
+    assert.equal(found("  codes    status  "), 1);
+    assert.equal(found("status missing"), 0);
+  });
+});
