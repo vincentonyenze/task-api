@@ -33,7 +33,7 @@ describe("parseTaskQuery", () => {
 
   it("rejects parameters it doesn't know: usually typos", () => {
     assert.deepEqual(parseTaskQuery({ staus: "done" }).errors, [
-      { field: "staus", message: '"staus" isn\'t something tasks can be filtered by' },
+      { field: "staus", message: '"staus" isn\'t a query option for tasks. Use: sort, q, status, priority, dueBefore' },
     ]);
   });
 

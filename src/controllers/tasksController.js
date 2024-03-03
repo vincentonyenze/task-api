@@ -1,5 +1,6 @@
 import { invalidBody, invalidQuery, taskNotFound, validationFailed } from "../http/errors.js";
 import { filterTasks } from "../models/taskFilters.js";
+import { DEFAULT_SORT, sortTasks } from "../models/taskSorting.js";
 import { parseTaskQuery } from "../validation/taskQuery.js";
 import { validateTask } from "../validation/taskValidation.js";
 
@@ -41,14 +42,17 @@ function checkTask(body, options) {
 
 export function createTasksController({ store }) {
   return {
-    // GET /tasks  ->  every task, or those matching the filters:
+    // GET /tasks  ->  every task, or those matching the filters, in order:
     //   ?q=report q3  ?status=todo,in_progress  ?priority=high  ?dueBefore=2026-11-30
+    //   ?sort=-priority,dueDate
     // Wrapped as { data, meta }, so meta can grow (Step 26).
     list(req, res) {
-      const { value: filters, errors } = parseTaskQuery(req.query);
+      const { value, errors } = parseTaskQuery(req.query);
       if (errors.length > 0) throw invalidQuery(errors);
 
-      const tasks = filterTasks(store.list(), filters);
+      // Sorting is about ORDER, not which tasks: kept apart from the filters
+      const { sort = DEFAULT_SORT, ...filters } = value;
+      const tasks = sortTasks(filterTasks(store.list(), filters), sort);
       res.json({ data: tasks, meta: { total: tasks.length } });
     },
 

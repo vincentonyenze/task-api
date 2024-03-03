@@ -1,3 +1,4 @@
+import { SORT_FIELDS } from "../models/taskSorting.js";
 import { TASK_PRIORITIES, TASK_STATUSES } from "../models/taskStore.js";
 import { isRealDate } from "./taskValidation.js";
 
@@ -12,8 +13,11 @@ import { isRealDate } from "./taskValidation.js";
 
 export const SEARCH_MAX = 100;
 
-// Each parameter the list understands. Steps 25-26 add sort, page, limit.
+// Each parameter the list understands. Step 26 adds page and limit.
 const PARAMETERS = {
+  // Order: ?sort=title, ?sort=-createdAt (minus: descending),
+  // ?sort=-priority,dueDate (several: the first matters most)
+  sort: parseSort,
   // Search words: ?q=report q3. An EMPTY q means "no search" (search
   // boxes often send q= when nothing was typed), so it isn't an error.
   q: (raw) => {
@@ -49,6 +53,32 @@ function oneOrMore(raw, allowed, name) {
   return { value: [...new Set(values)] };
 }
 
+// "-priority,dueDate" -> [{ field: "priority", direction: "desc" },
+//                         { field: "dueDate", direction: "asc" }]
+function parseSort(raw) {
+  if (typeof raw !== "string") return { error: "sort must be given once, e.g. sort=-priority,dueDate" };
+  const parts = raw
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length === 0) return { error: "sort can't be empty" };
+
+  const sort = [];
+  for (const part of parts) {
+    const direction = part.startsWith("-") ? "desc" : "asc";
+    const field = part.replace(/^-/, "");
+    if (field === "") return { error: "sort needs a field name after the -, e.g. sort=-createdAt" };
+    if (!Object.hasOwn(SORT_FIELDS, field)) {
+      return { error: `Can't sort by "${field}". Use: ${Object.keys(SORT_FIELDS).join(", ")} (add - in front for descending)` };
+    }
+    if (sort.some((existing) => existing.field === field)) {
+      return { error: `"${field}" appears twice in sort` };
+    }
+    sort.push({ field, direction });
+  }
+  return { value: sort };
+}
+
 // req.query -> { value, errors }, like validateTask
 //   value:  e.g. { status: ["todo", "in_progress"], priority: ["high"] }
 //   errors: [{ field, message }] for every problem
@@ -58,7 +88,10 @@ export function parseTaskQuery(query) {
   for (const [name, raw] of Object.entries(query)) {
     const parse = Object.hasOwn(PARAMETERS, name) ? PARAMETERS[name] : undefined;
     if (!parse) {
-      errors.push({ field: name, message: `"${name}" isn't something tasks can be filtered by` });
+      errors.push({
+        field: name,
+        message: `"${name}" isn't a query option for tasks. Use: ${Object.keys(PARAMETERS).join(", ")}`,
+      });
       continue;
     }
     const result = parse(raw);
