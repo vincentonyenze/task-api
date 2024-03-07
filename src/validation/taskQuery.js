@@ -1,3 +1,4 @@
+import { MAX_LIMIT } from "../models/pagination.js";
 import { SORT_FIELDS } from "../models/taskSorting.js";
 import { TASK_PRIORITIES, TASK_STATUSES } from "../models/taskStore.js";
 import { isRealDate } from "./taskValidation.js";
@@ -13,8 +14,11 @@ import { isRealDate } from "./taskValidation.js";
 
 export const SEARCH_MAX = 100;
 
-// Each parameter the list understands. Step 26 adds page and limit.
+// Each parameter the list understands
 const PARAMETERS = {
+  // Pages: ?page=2&limit=10 (defaults: page 1, 20 per page)
+  page: (raw) => wholeNumber(raw, "page", 1, 100_000),
+  limit: (raw) => wholeNumber(raw, "limit", 1, MAX_LIMIT),
   // Order: ?sort=title, ?sort=-createdAt (minus: descending),
   // ?sort=-priority,dueDate (several: the first matters most)
   sort: parseSort,
@@ -51,6 +55,18 @@ function oneOrMore(raw, allowed, name) {
     return { error: `Unknown ${name}: ${wrong.join(", ")}. Use one or more of: ${allowed.join(", ")}` };
   }
   return { value: [...new Set(values)] };
+}
+
+// "2" -> 2, within min..max. Only plain digits: "2.5", "-1", "1e3", " 2"
+// and "two" are all rejected (Number() alone would happily accept some of
+// them: Number("1e3") is 1000, Number("") is 0).
+function wholeNumber(raw, name, min, max) {
+  if (typeof raw !== "string" || !/^\d+$/.test(raw)) {
+    return { error: `${name} must be a whole number from ${min} to ${max}` };
+  }
+  const number = Number(raw);
+  if (number < min || number > max) return { error: `${name} must be a whole number from ${min} to ${max}` };
+  return { value: number };
 }
 
 // "-priority,dueDate" -> [{ field: "priority", direction: "desc" },

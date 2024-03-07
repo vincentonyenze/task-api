@@ -1,4 +1,5 @@
 import { invalidBody, invalidQuery, taskNotFound, validationFailed } from "../http/errors.js";
+import { DEFAULT_LIMIT, paginate } from "../models/pagination.js";
 import { filterTasks } from "../models/taskFilters.js";
 import { DEFAULT_SORT, sortTasks } from "../models/taskSorting.js";
 import { parseTaskQuery } from "../validation/taskQuery.js";
@@ -26,6 +27,26 @@ function requireBody(req) {
   }
 }
 
+// Ready-made addresses for other pages of the same list: the client's
+// filters and sort are kept, only page (and limit) change. Built from the
+// address that was actually requested, so nothing the client chose is lost.
+function pageLinks(req, { page, limit, totalPages }) {
+  const linkTo = (pageNumber) => {
+    const params = new URL(req.originalUrl, "http://localhost").searchParams;
+    params.set("page", String(pageNumber));
+    params.set("limit", String(limit));
+    return `${req.baseUrl}?${params}`;
+  };
+  return {
+    self: linkTo(page),
+    first: linkTo(1),
+    last: linkTo(totalPages),
+    // null when there's no such page: clients can stop when next is null
+    next: page < totalPages ? linkTo(page + 1) : null,
+    previous: page > 1 ? linkTo(Math.min(page - 1, totalPages)) : null,
+  };
+}
+
 // The task, or a 404 if there's no such id
 function findTask(store, id) {
   const task = store.get(id);
@@ -42,18 +63,23 @@ function checkTask(body, options) {
 
 export function createTasksController({ store }) {
   return {
-    // GET /tasks  ->  every task, or those matching the filters, in order:
+    // GET /tasks  ->  one page of tasks, filtered and sorted:
     //   ?q=report q3  ?status=todo,in_progress  ?priority=high  ?dueBefore=2026-11-30
-    //   ?sort=-priority,dueDate
-    // Wrapped as { data, meta }, so meta can grow (Step 26).
+    //   ?sort=-priority,dueDate  ?page=2&limit=10
+    //
+    // The order matters: filter (which tasks), then sort (what order), then
+    // cut out the page. Paging before sorting would sort just one page.
     list(req, res) {
       const { value, errors } = parseTaskQuery(req.query);
       if (errors.length > 0) throw invalidQuery(errors);
 
-      // Sorting is about ORDER, not which tasks: kept apart from the filters
-      const { sort = DEFAULT_SORT, ...filters } = value;
+      const { sort = DEFAULT_SORT, page = 1, limit = DEFAULT_LIMIT, ...filters } = value;
       const tasks = sortTasks(filterTasks(store.list(), filters), sort);
-      res.json({ data: tasks, meta: { total: tasks.length } });
+      const { items, meta } = paginate(tasks, { page, limit });
+
+      // meta: the numbers. links: where to go next. Clients that only read
+      // "data" (from Step 9) keep working: the envelope was built to grow.
+      res.json({ data: items, meta, links: pageLinks(req, meta) });
     },
 
     // GET /tasks/:id  ->  one task (findTask throws the 404)
