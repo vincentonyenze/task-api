@@ -9,7 +9,8 @@ export const EXAMPLE_TASKS = [
   { title: "Buy milk", description: "Oat milk, two cartons", status: "todo", priority: "low" },
 ];
 
-// Adds the examples to a store
-export function seed(store) {
-  for (const task of EXAMPLE_TASKS) store.create(task);
+// Adds the examples to a store (one at a time, in order: awaiting each
+// keeps them in this order in the list)
+export async function seed(store) {
+  for (const task of EXAMPLE_TASKS) await store.create(task);
 }

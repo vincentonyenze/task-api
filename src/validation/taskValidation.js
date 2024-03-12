@@ -1,4 +1,4 @@
-import { TASK_PRIORITIES, TASK_STATUSES } from "../models/taskStore.js";
+import { TASK_PRIORITIES, TASK_STATUSES } from "../models/task.js";
 
 // What counts as a valid task, checked BEFORE anything reaches the store.
 // Pure functions: input in, answer out. No Express, no requests, so the

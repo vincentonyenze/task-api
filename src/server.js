@@ -1,6 +1,6 @@
 import { createApp } from "./app.js";
 import { config } from "./config.js";
-import { createTaskStore } from "./models/taskStore.js";
+import { createMemoryTaskStore } from "./models/memoryTaskStore.js";
 import { seed } from "./seed.js";
 
 // Starts the API: builds the app, listens on the port, and stops cleanly.
@@ -9,8 +9,10 @@ import { seed } from "./seed.js";
 
 // Where the tasks live. In development, start with a few examples so
 // there's something to see.
-const store = createTaskStore();
-if (config.environment === "development") seed(store);
+// (Top-level await: allowed in ES modules, so the examples are in place
+// before the server starts answering.)
+const store = createMemoryTaskStore();
+if (config.environment === "development") await seed(store);
 
 const app = createApp({ environment: config.environment, store });
 

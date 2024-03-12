@@ -1,6 +1,6 @@
 import { MAX_LIMIT } from "../models/pagination.js";
 import { SORT_FIELDS } from "../models/taskSorting.js";
-import { TASK_PRIORITIES, TASK_STATUSES } from "../models/taskStore.js";
+import { TASK_PRIORITIES, TASK_STATUSES } from "../models/task.js";
 import { isRealDate } from "./taskValidation.js";
 
 // Checks the QUERY STRING of GET /tasks: ?status=done&priority=high...

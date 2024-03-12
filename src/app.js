@@ -7,7 +7,7 @@ import { allowOnly } from "./middleware/allowMethods.js";
 import { createErrorHandler } from "./middleware/errorHandler.js";
 import { createRequestId } from "./middleware/requestId.js";
 import { createRequestLogger } from "./middleware/requestLogger.js";
-import { createTaskStore } from "./models/taskStore.js";
+import { createMemoryTaskStore } from "./models/memoryTaskStore.js";
 import { createTasksRouter } from "./routes/tasks.js";
 
 // Builds the Express application: its settings and routes. It does NOT
@@ -28,7 +28,7 @@ import { createTasksRouter } from "./routes/tasks.js";
 // options.logError: where unexpected errors (bugs) are reported
 export function createApp({
   environment = "development",
-  store = createTaskStore(),
+  store = createMemoryTaskStore(),
   log = environment === "test" ? null : console.log,
   logError = console.error,
 } = {}) {

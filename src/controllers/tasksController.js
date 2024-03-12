@@ -7,6 +7,12 @@ import { validateTask } from "../validation/taskValidation.js";
 
 // WHAT HAPPENS for each task request: the "controller".
 //
+// The store is ASYNC (Step 27): every call to it is awaited, and the
+// handlers are async functions. Express 5 catches errors from async
+// handlers by itself (Step 21), so a thrown 404 still reaches the error
+// handler. Forgetting an await would be a SILENT bug: store.get() would
+// give back a promise, which is never "falsy", so no 404 would ever be sent.
+//
 // Each handler does the same three things:
 //   1. read the request (params, body)
 //   2. ask for the work to be done (validation, the store)
@@ -48,8 +54,8 @@ function pageLinks(req, { page, limit, totalPages }) {
 }
 
 // The task, or a 404 if there's no such id
-function findTask(store, id) {
-  const task = store.get(id);
+async function findTask(store, id) {
+  const task = await store.get(id);
   if (!task) throw taskNotFound(id);
   return task;
 }
@@ -69,12 +75,12 @@ export function createTasksController({ store }) {
     //
     // The order matters: filter (which tasks), then sort (what order), then
     // cut out the page. Paging before sorting would sort just one page.
-    list(req, res) {
+    async list(req, res) {
       const { value, errors } = parseTaskQuery(req.query);
       if (errors.length > 0) throw invalidQuery(errors);
 
       const { sort = DEFAULT_SORT, page = 1, limit = DEFAULT_LIMIT, ...filters } = value;
-      const tasks = sortTasks(filterTasks(store.list(), filters), sort);
+      const tasks = sortTasks(filterTasks(await store.list(), filters), sort);
       const { items, meta } = paginate(tasks, { page, limit });
 
       // meta: the numbers. links: where to go next. Clients that only read
@@ -83,40 +89,40 @@ export function createTasksController({ store }) {
     },
 
     // GET /tasks/:id  ->  one task (findTask throws the 404)
-    getOne(req, res) {
-      res.json({ data: findTask(store, req.params.id) });
+    async getOne(req, res) {
+      res.json({ data: await findTask(store, req.params.id) });
     },
 
     // POST /tasks  ->  201 Created + Location, with the new task
-    create(req, res) {
+    async create(req, res) {
       requireBody(req);
       // Only the CLEANED values reach the store (trimmed, checked)
-      const task = store.create(checkTask(req.body));
+      const task = await store.create(checkTask(req.body));
       res.status(201).location(`${req.baseUrl}/${task.id}`).json({ data: task });
     },
 
     // PATCH /tasks/:id  ->  change SOME fields; the rest stay as they were.
     // The checks run in order, and the first problem found is the answer:
     // no body (400), no such task (404), invalid change (400).
-    update(req, res) {
+    async update(req, res) {
       requireBody(req);
-      findTask(store, req.params.id);
+      await findTask(store, req.params.id);
       const changes = checkTask(req.body, { partial: true });
-      res.json({ data: store.update(req.params.id, changes) });
+      res.json({ data: await store.update(req.params.id, changes) });
     },
 
     // PUT /tasks/:id  ->  REPLACE a whole task (anything left out goes back
     // to its default). Only replaces tasks that exist.
-    replace(req, res) {
+    async replace(req, res) {
       requireBody(req);
-      findTask(store, req.params.id);
+      await findTask(store, req.params.id);
       const task = checkTask(req.body); // a whole task: title required
-      res.json({ data: store.replace(req.params.id, task) });
+      res.json({ data: await store.replace(req.params.id, task) });
     },
 
     // DELETE /tasks/:id  ->  204 No Content, or 404 if it's already gone
-    remove(req, res) {
-      if (!store.remove(req.params.id)) throw taskNotFound(req.params.id);
+    async remove(req, res) {
+      if (!(await store.remove(req.params.id))) throw taskNotFound(req.params.id);
       res.status(204).end();
     },
   };
