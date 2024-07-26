@@ -1,5 +1,6 @@
 import { createApp } from "./app.js";
 import { config } from "./config.js";
+import { createFileTaskStore } from "./models/fileTaskStore.js";
 import { createMemoryTaskStore } from "./models/memoryTaskStore.js";
 import { seed } from "./seed.js";
 
@@ -7,12 +8,19 @@ import { seed } from "./seed.js";
 // This is the file `npm start` runs. Everything about WHAT the API does is
 // in app.js; this file is only about RUNNING it.
 
-// Where the tasks live. In development, start with a few examples so
-// there's something to see.
-// (Top-level await: allowed in ES modules, so the examples are in place
-// before the server starts answering.)
-const store = createMemoryTaskStore();
-if (config.environment === "development") await seed(store);
+// Where the tasks live (STORAGE in .env). The rest of the API doesn't know
+// or care which store it is: they share one interface.
+// (Top-level await: allowed in ES modules, so the file is read before the
+// server starts answering. A broken file stops the server right here.)
+const store =
+  config.storage === "file"
+    ? await createFileTaskStore({ file: config.dataFile })
+    : createMemoryTaskStore();
+console.log(config.storage === "file" ? `Tasks are saved in ${config.dataFile}` : "Tasks are kept in memory only");
+
+// In development, an EMPTY store gets a few examples so there's something
+// to see. Only when empty: a restart mustn't add them again every time.
+if (config.environment === "development" && (await store.count()) === 0) await seed(store);
 
 const app = createApp({ environment: config.environment, store });
 
@@ -39,11 +47,12 @@ server.on("error", (error) => {
 // when they stop or restart an app. Instead of dying mid-request:
 //   1. stop accepting NEW connections
 //   2. let requests already in progress finish
-//   3. then exit
-// (Step 28 adds "make sure the tasks file is saved" here too.)
+//   3. wait until every accepted change is saved
+//   4. then exit
 function shutDown(signal) {
   console.log(`${signal} received: shutting down...`);
-  server.close(() => {
+  server.close(async () => {
+    await store.close();
     console.log("Server stopped. Bye!");
     process.exit(0);
   });

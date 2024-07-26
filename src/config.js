@@ -27,8 +27,23 @@ function readEnvironment(value) {
   return environment;
 }
 
+// Where tasks are kept: "file" (data/tasks.json, survives a restart) or
+// "memory" (gone when the server stops: handy for a quick experiment)
+function readStorage(value) {
+  const allowed = ["file", "memory"];
+  const storage = value || "file";
+  if (!allowed.includes(storage)) {
+    throw new Error(`STORAGE must be one of ${allowed.join(", ")}, but it was "${value}"`);
+  }
+  return storage;
+}
+
 // Object.freeze: settings can be read anywhere, but changed nowhere
 export const config = Object.freeze({
   port: readPort(process.env.PORT),
   environment: readEnvironment(process.env.NODE_ENV),
+  storage: readStorage(process.env.STORAGE),
+  // The tasks file (only used when storage is "file"). A relative path
+  // starts from the folder the server is started in.
+  dataFile: process.env.DATA_FILE || "data/tasks.json",
 });

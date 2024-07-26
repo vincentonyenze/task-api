@@ -13,6 +13,8 @@ import { newTask, RANDOM_IDS, REAL_CLOCK, replacedTask, updatedTask } from "./ta
 //   replace(id, data)    -> the replaced task, or undefined (PUT)
 //   remove(id)           -> true if it existed, false if not
 //   count()              -> how many tasks there are
+//   close()              -> waits until every change is saved (call it
+//                           before the program exits)
 //
 // Every method is ASYNC: it returns a promise. Memory doesn't need to wait
 // for anything, but a file or a database does, so the interface allows for
@@ -66,5 +68,8 @@ export function createMemoryTaskStore({ now = REAL_CLOCK, generateId = RANDOM_ID
     async count() {
       return tasks.size;
     },
+
+    // Nothing to wait for: memory is "saved" instantly
+    async close() {},
   };
 }
