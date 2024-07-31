@@ -14,7 +14,8 @@ import { HttpError } from "../http/errors.js";
 //   1. HttpError: thrown on purpose (404, 400...). Its status and message
 //      were written for the client: send them.
 //   2. Errors from Express's own middleware, like express.json() on broken
-//      JSON: translated into the same shape.
+//      JSON (400) or an unreadable charset (415): translated into the same
+//      shape.
 //   3. Anything else is a BUG. The client gets a plain 500 with no
 //      details (the inside of the code is none of their business, and
 //      could help an attacker); the full error goes to the server's log,
@@ -43,6 +44,14 @@ export function createErrorHandler({ logError = console.error } = {}) {
       // express.json() couldn't read the body: it isn't valid JSON
       status = 400;
       body = { code: "INVALID_JSON", message: "The request body isn't valid JSON." };
+    } else if (error.type === "charset.unsupported" || error.type === "encoding.unsupported") {
+      // JSON, but in a text encoding (charset=latin1) or a compression
+      // express.json() can't read
+      status = 415;
+      body = {
+        code: "UNSUPPORTED_MEDIA_TYPE",
+        message: "The body must be JSON in UTF-8 (e.g. Content-Type: application/json; charset=utf-8).",
+      };
     } else {
       // A bug: tell the server's log everything, the client nothing
       logError(`Unexpected error [${req.id}] during ${req.method} ${req.originalUrl}:`, error);

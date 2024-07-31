@@ -37,7 +37,8 @@ curl -X POST http://localhost:3000/tasks \
 | 400 | Bad Request | Something in your request is wrong (with details of what) |
 | 404 | Not Found | No such thing |
 | 405 | Method Not Allowed | That address exists, but not with this method |
-| 415 | Unsupported Media Type | The body isn't in a format the server accepts |
+| 406 | Not Acceptable | Your `Accept` header rules out JSON, the only thing this API sends |
+| 415 | Unsupported Media Type | The body isn't JSON: add `-H "Content-Type: application/json"` |
 | 429 | Too Many Requests | Slow down (with `Retry-After` saying how long) |
 | 500 | Internal Server Error | A bug on the server: not your fault |
 

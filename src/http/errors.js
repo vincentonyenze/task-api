@@ -55,6 +55,33 @@ export function invalidBody(message) {
   return new HttpError(400, "INVALID_BODY", message);
 }
 
+// 415: a body was sent, but not as JSON (Content-Type: text/plain, a
+// form, or no Content-Type at all). The Accept-Post / Accept-Patch header
+// tells the client what WOULD work.
+export function unsupportedMediaType(req) {
+  const headers = {};
+  if (req.method === "POST") headers["Accept-Post"] = "application/json";
+  if (req.method === "PATCH") headers["Accept-Patch"] = "application/json";
+  const sent = req.get("content-type");
+  return new HttpError(
+    415,
+    "UNSUPPORTED_MEDIA_TYPE",
+    `The body must be JSON, sent with "Content-Type: application/json"${sent ? `, not "${sent}"` : " (it had no Content-Type)"}.`,
+    undefined,
+    headers
+  );
+}
+
+// 406: the client's Accept header rules out JSON, the only thing this API
+// can answer with
+export function notAcceptable(req) {
+  return new HttpError(
+    406,
+    "NOT_ACCEPTABLE",
+    `This API only answers in JSON, but the request's Accept header was "${req.get("accept")}". Add application/json to it.`
+  );
+}
+
 // 400 for a query string that can't be used (?status=finished)
 export function invalidQuery(errors) {
   const message = errors.length === 1 ? "The query has a problem." : `The query has ${errors.length} problems.`;

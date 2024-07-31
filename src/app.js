@@ -2,7 +2,7 @@ import express from "express";
 // Importing a JSON file needs the "with { type: 'json' }" part (an import
 // ATTRIBUTE): it tells Node to read the file as data, never run it as code
 import packageInfo from "../package.json" with { type: "json" };
-import { routeNotFound } from "./http/errors.js";
+import { notAcceptable, routeNotFound } from "./http/errors.js";
 import { allowOnly } from "./middleware/allowMethods.js";
 import { createErrorHandler } from "./middleware/errorHandler.js";
 import { createRequestId } from "./middleware/requestId.js";
@@ -46,11 +46,29 @@ export function createApp({
   app.use(createRequestId());
   if (log) app.use(createRequestLogger({ log }));
 
+  // CONTENT NEGOTIATION: the client's Accept header says what it can read.
+  // This API only speaks JSON, so a client that rules JSON out gets a 406
+  // straight away. (Browsers send "...*/*", curl sends "*/*", and no
+  // Accept header at all means "anything": all fine.)
+  // The 406 itself is still JSON: there's nothing better to send.
+  app.use((req, res, next) => {
+    if (!req.accepts("json")) return next(notAcceptable(req));
+    next();
+  });
+
   // MIDDLEWARE: code that runs on requests BEFORE the routes do (more in
   // Step 19). express.json() reads the request's body and, if the client
   // said it's JSON (Content-Type: application/json), turns it into an
   // object at req.body. Without it, routes can't see what was sent.
   app.use(express.json());
+
+  // THE RESPONSE CONVENTIONS (the same everywhere, so a client needs
+  // only one way of reading answers):
+  //   success       -> { "data": ... }   (lists add "meta" and "links")
+  //   created       -> 201, { "data": the new task }, Location header
+  //   deleted       -> 204, no body at all
+  //   any error     -> { "error": { code, message, details?, requestId } }
+  //   always JSON: Content-Type: application/json; charset=utf-8
 
   // GET /  ->  a small JSON welcome
   //
@@ -65,8 +83,10 @@ export function createApp({
       // res.json() turns the object into JSON text, and sets the
       // Content-Type header to application/json so the client knows what it is
       res.json({
-        name: "Task API",
-        message: "Hello! This API manages tasks. Try GET /tasks.",
+        data: {
+          name: "Task API",
+          message: "Hello! This API manages tasks. Try GET /tasks.",
+        },
       });
     })
     .all(allowOnly("GET"));
@@ -84,11 +104,13 @@ export function createApp({
       // Never cached: an old "ok" saved by some proxy would be worse than useless
       res.set("Cache-Control", "no-store");
       res.json({
-        status: "ok",
-        version: packageInfo.version, // from package.json, so it can't drift
-        environment,
-        startedAt: startedAt.toISOString(),
-        uptimeSeconds: Math.round(process.uptime()),
+        data: {
+          status: "ok",
+          version: packageInfo.version, // from package.json, so it can't drift
+          environment,
+          startedAt: startedAt.toISOString(),
+          uptimeSeconds: Math.round(process.uptime()),
+        },
       });
     })
     .all(allowOnly("GET"));

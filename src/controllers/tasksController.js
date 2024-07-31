@@ -1,4 +1,4 @@
-import { invalidBody, invalidQuery, taskNotFound, validationFailed } from "../http/errors.js";
+import { invalidBody, invalidQuery, taskNotFound, unsupportedMediaType, validationFailed } from "../http/errors.js";
 import { DEFAULT_LIMIT, paginate } from "../models/pagination.js";
 import { filterTasks } from "../models/taskFilters.js";
 import { DEFAULT_SORT, sortTasks } from "../models/taskSorting.js";
@@ -25,12 +25,20 @@ import { validateTask } from "../validation/taskValidation.js";
 //   validation  -> what's allowed
 //   models      -> the data and its rules
 
-// Express 5: req.body stays undefined when no JSON was read: no body, or
-// the Content-Type header is missing. (Step 29 makes the second a 415.)
+// Express 5: req.body stays undefined when no JSON was read. Two reasons,
+// two different answers:
+//   - nothing was sent at all       -> 400: "you forgot the body"
+//   - something was sent, not JSON  -> 415: "wrong kind of body"
+// (req.is() can't tell them apart: an empty POST still has
+// "Content-Length: 0", which counts as a body to it. So: look at the size.)
+function hasBody(req) {
+  return req.get("transfer-encoding") !== undefined || Number(req.get("content-length")) > 0;
+}
+
 function requireBody(req) {
-  if (req.body === undefined) {
-    throw invalidBody('Send the task as JSON, with the header "Content-Type: application/json".');
-  }
+  if (req.body !== undefined) return;
+  if (hasBody(req)) throw unsupportedMediaType(req);
+  throw invalidBody('This request needs a body: the task as JSON, with "Content-Type: application/json".');
 }
 
 // Ready-made addresses for other pages of the same list: the client's
