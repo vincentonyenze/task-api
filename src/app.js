@@ -4,6 +4,7 @@ import express from "express";
 import packageInfo from "../package.json" with { type: "json" };
 import { notAcceptable, routeNotFound } from "./http/errors.js";
 import { allowOnly } from "./middleware/allowMethods.js";
+import { createCors } from "./middleware/cors.js";
 import { createErrorHandler } from "./middleware/errorHandler.js";
 import { createRequestId } from "./middleware/requestId.js";
 import { createRequestLogger } from "./middleware/requestLogger.js";
@@ -26,8 +27,11 @@ import { createTasksRouter } from "./routes/tasks.js";
 // options.log: where the request log goes. Off in tests (so test output
 // stays readable) unless a test passes its own function to collect lines.
 // options.logError: where unexpected errors (bugs) are reported
+// options.corsOrigins: the web pages allowed to call the API from a
+// browser (see middleware/cors.js). None by default.
 export function createApp({
   environment = "development",
+  corsOrigins = [],
   store = createMemoryTaskStore(),
   log = environment === "test" ? null : console.log,
   logError = console.error,
@@ -43,8 +47,13 @@ export function createApp({
   //   1. request id: first, so everything after can use req.id
   //   2. logger: early, so it sees every request, even ones a later step
   //      rejects (like broken JSON in express.json())
+  //   3. CORS: before anything that can answer, so EVERY answer, errors
+  //      included, carries the CORS headers. Without them, a page would
+  //      get an unreadable "CORS error" instead of the API's helpful
+  //      400 or 404. It also answers browsers' preflight requests.
   app.use(createRequestId());
   if (log) app.use(createRequestLogger({ log }));
+  app.use(createCors({ origins: corsOrigins }));
 
   // CONTENT NEGOTIATION: the client's Accept header says what it can read.
   // This API only speaks JSON, so a client that rules JSON out gets a 406

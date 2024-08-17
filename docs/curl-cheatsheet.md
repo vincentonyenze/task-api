@@ -43,3 +43,20 @@ curl -X POST http://localhost:3000/tasks \
 | 500 | Internal Server Error | A bug on the server: not your fault |
 
 The first digit says who it's about: **2xx** success, **4xx** a problem with the request (the client's side), **5xx** a problem on the server.
+
+## Checking CORS
+
+Browsers send an `Origin` header and, before a JSON POST, PATCH or DELETE, a **preflight** `OPTIONS` request. curl can pretend to be that browser:
+
+```bash
+# A page on http://localhost:5173 reading the list: look for Access-Control-Allow-Origin
+curl -i -H "Origin: http://localhost:5173" http://localhost:3000/tasks
+
+# The preflight before a PATCH: expect 204 and the Access-Control-Allow-* headers
+curl -i -X OPTIONS http://localhost:3000/tasks/some-id \
+  -H "Origin: http://localhost:5173" \
+  -H "Access-Control-Request-Method: PATCH" \
+  -H "Access-Control-Request-Headers: content-type"
+```
+
+No `Access-Control-Allow-Origin` in the answer means the browser would hide it from the page. Allowed origins are set with `CORS_ORIGINS` in `.env`.

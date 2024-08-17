@@ -22,7 +22,7 @@ console.log(config.storage === "file" ? `Tasks are saved in ${config.dataFile}` 
 // to see. Only when empty: a restart mustn't add them again every time.
 if (config.environment === "development" && (await store.count()) === 0) await seed(store);
 
-const app = createApp({ environment: config.environment, store });
+const app = createApp({ environment: config.environment, store, corsOrigins: config.corsOrigins });
 
 // app.listen gives back the underlying Node HTTP server, which we need in
 // order to stop it later. A PORT is like a door number on this computer:
