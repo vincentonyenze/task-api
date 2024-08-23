@@ -44,6 +44,14 @@ export function createErrorHandler({ logError = console.error } = {}) {
       // express.json() couldn't read the body: it isn't valid JSON
       status = 400;
       body = { code: "INVALID_JSON", message: "The request body isn't valid JSON." };
+    } else if (error.type === "entity.too.large") {
+      // The body is bigger than express.json()'s limit (see app.js). It
+      // stopped reading at the limit: the rest was never even loaded.
+      status = 413;
+      body = {
+        code: "BODY_TOO_LARGE",
+        message: `The request body is too large. The limit is ${error.limit} bytes.`,
+      };
     } else if (error.type === "charset.unsupported" || error.type === "encoding.unsupported") {
       // JSON, but in a text encoding (charset=latin1) or a compression
       // express.json() can't read

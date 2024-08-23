@@ -82,6 +82,18 @@ export function notAcceptable(req) {
   );
 }
 
+// 429: too many requests from this client. Retry-After says how many
+// seconds to wait before trying again.
+export function tooManyRequests(retryAfterSeconds) {
+  return new HttpError(
+    429,
+    "TOO_MANY_REQUESTS",
+    `Too many requests. Try again in ${retryAfterSeconds} second${retryAfterSeconds === 1 ? "" : "s"}.`,
+    undefined,
+    { "Retry-After": String(retryAfterSeconds) }
+  );
+}
+
 // 400 for a query string that can't be used (?status=finished)
 export function invalidQuery(errors) {
   const message = errors.length === 1 ? "The query has a problem." : `The query has ${errors.length} problems.`;

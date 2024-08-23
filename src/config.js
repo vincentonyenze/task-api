@@ -69,12 +69,30 @@ function readCorsOrigins(value, environment) {
   return origins;
 }
 
+// Rate limiting: RATE_LIMIT_MAX requests per RATE_LIMIT_WINDOW_SECONDS
+// for each client. RATE_LIMIT_MAX=0 turns it off.
+function readWholeNumber(value, name, fallback, min, max) {
+  if (value === undefined || value === "") return fallback;
+  const number = Number(value);
+  if (!/^\d+$/.test(value) || number < min || number > max) {
+    throw new Error(`${name} must be a whole number from ${min} to ${max}, but it was "${value}"`);
+  }
+  return number;
+}
+
+function readRateLimit(env) {
+  const max = readWholeNumber(env.RATE_LIMIT_MAX, "RATE_LIMIT_MAX", 100, 0, 1_000_000);
+  const seconds = readWholeNumber(env.RATE_LIMIT_WINDOW_SECONDS, "RATE_LIMIT_WINDOW_SECONDS", 60, 1, 86_400);
+  return max === 0 ? null : { max, windowMs: seconds * 1000 };
+}
+
 // Object.freeze: settings can be read anywhere, but changed nowhere
 const environment = readEnvironment(process.env.NODE_ENV);
 export const config = Object.freeze({
   port: readPort(process.env.PORT),
   environment,
   corsOrigins: readCorsOrigins(process.env.CORS_ORIGINS, environment),
+  rateLimit: readRateLimit(process.env),
   storage: readStorage(process.env.STORAGE),
   // The tasks file (only used when storage is "file"). A relative path
   // starts from the folder the server is started in.

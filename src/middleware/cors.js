@@ -34,8 +34,9 @@ const ALLOWED_METHODS = "GET, HEAD, POST, PUT, PATCH, DELETE";
 // few "safe" ones browsers allow without asking)
 const ALLOWED_HEADERS = "Content-Type, X-Request-Id";
 // Headers a page may READ from the answer. Without this, a page sees only
-// a few basic headers: not Location (where a new task is) or the request id.
-const EXPOSED_HEADERS = "Location, X-Request-Id";
+// a few basic headers: not Location (where a new task is), the request id,
+// or how long to wait after a 429.
+const EXPOSED_HEADERS = "Location, X-Request-Id, Retry-After, RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset";
 // How long (seconds) a browser may remember a preflight answer, instead
 // of asking again before every request
 const PREFLIGHT_MAX_AGE = "600";

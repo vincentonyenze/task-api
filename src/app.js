@@ -6,6 +6,7 @@ import { notAcceptable, routeNotFound } from "./http/errors.js";
 import { allowOnly } from "./middleware/allowMethods.js";
 import { createCors } from "./middleware/cors.js";
 import { createErrorHandler } from "./middleware/errorHandler.js";
+import { createRateLimiter } from "./middleware/rateLimit.js";
 import { createRequestId } from "./middleware/requestId.js";
 import { createRequestLogger } from "./middleware/requestLogger.js";
 import { createMemoryTaskStore } from "./models/memoryTaskStore.js";
@@ -29,9 +30,15 @@ import { createTasksRouter } from "./routes/tasks.js";
 // options.logError: where unexpected errors (bugs) are reported
 // options.corsOrigins: the web pages allowed to call the API from a
 // browser (see middleware/cors.js). None by default.
+// options.rateLimit: { max, windowMs } per client (middleware/rateLimit.js),
+// or null for no limit. Off by default, so tests aren't slowed by it;
+// server.js turns it on from the settings.
+export const BODY_LIMIT = "16kb";
+
 export function createApp({
   environment = "development",
   corsOrigins = [],
+  rateLimit = null,
   store = createMemoryTaskStore(),
   log = environment === "test" ? null : console.log,
   logError = console.error,
@@ -55,6 +62,20 @@ export function createApp({
   if (log) app.use(createRequestLogger({ log }));
   app.use(createCors({ origins: corsOrigins }));
 
+  //   4. rate limit: after CORS (so a page can read the 429 and its
+  //      Retry-After), before the body is read (no work for a client
+  //      that's already over its limit). The health check doesn't count:
+  //      monitoring calls it constantly and must never be refused.
+  //
+  // req.ip is the address the request came from. BEHIND A PROXY (most
+  // hosting), that's the proxy's address for EVERY client, so everyone
+  // would share one limit: then set app.set("trust proxy", 1) so Express
+  // reads the real client from the X-Forwarded-For header. (Only behind a
+  // proxy you trust: anyone can send that header and claim any address.)
+  if (rateLimit) {
+    app.use(createRateLimiter({ ...rateLimit, skip: (req) => req.path === "/health" }));
+  }
+
   // CONTENT NEGOTIATION: the client's Accept header says what it can read.
   // This API only speaks JSON, so a client that rules JSON out gets a 406
   // straight away. (Browsers send "...*/*", curl sends "*/*", and no
@@ -69,7 +90,13 @@ export function createApp({
   // Step 19). express.json() reads the request's body and, if the client
   // said it's JSON (Content-Type: application/json), turns it into an
   // object at req.body. Without it, routes can't see what was sent.
-  app.use(express.json());
+  //
+  // limit: the biggest body it will read. Bigger: 413, and reading stops
+  // there (otherwise one huge request could fill the server's memory).
+  // The largest real task is under 7 KB (2,200 characters counted by
+  // .length, at most 3 bytes each in UTF-8), so 16 KB leaves room without
+  // inviting abuse.
+  app.use(express.json({ limit: BODY_LIMIT }));
 
   // THE RESPONSE CONVENTIONS (the same everywhere, so a client needs
   // only one way of reading answers):
