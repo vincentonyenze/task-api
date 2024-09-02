@@ -1,21 +1,18 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
-import { createApp } from "../app.js";
+import { startTestApi } from "./helpers/testApi.js";
 
 // The response conventions and content types, checked through REAL HTTP
-// requests: the app runs on a spare port (0 = "any free port") for the
-// duration of this file. (Steps 32-33 test every endpoint this way.)
-let server;
-let base;
+// requests. Plain fetch here (not the helper's request()), to send bodies
+// exactly as given, with exactly the headers given.
+let api;
 
 before(async () => {
-  server = createApp({ environment: "test" }).listen(0);
-  await new Promise((resolve) => server.once("listening", resolve));
-  base = `http://localhost:${server.address().port}`;
+  api = await startTestApi();
 });
-after(() => server.close());
+after(() => api.close());
 
-const send = (method, path, { body, headers = {} } = {}) => fetch(base + path, { method, body, headers });
+const send = (method, path, { body, headers = {} } = {}) => fetch(api.base + path, { method, body, headers });
 const JSON_TYPE = { "Content-Type": "application/json" };
 
 describe("request bodies (415 Unsupported Media Type)", () => {

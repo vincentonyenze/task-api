@@ -1,14 +1,7 @@
 import assert from "node:assert/strict";
 import { after, before, beforeEach, describe, it } from "node:test";
-import { createApp } from "../app.js";
-
-// Starts an app with the given options; returns its address and a way to
-// stop it
-async function startApp(options) {
-  const server = createApp({ environment: "test", ...options }).listen(0);
-  await new Promise((resolve) => server.once("listening", resolve));
-  return { base: `http://localhost:${server.address().port}`, close: () => server.close() };
-}
+import { createRateLimiter } from "../src/middleware/rateLimit.js";
+import { startTestApi as startApp } from "./helpers/testApi.js";
 
 describe("the body size limit (413)", () => {
   let app;
@@ -140,7 +133,6 @@ describe("rate limiting (429)", () => {
 describe("rate limiting: forgetting old clients", () => {
   it("drops clients whose window has ended, so memory doesn't grow forever", async () => {
     // Uses the limiter directly, with pretend requests, to see inside it
-    const { createRateLimiter } = await import("./rateLimit.js");
     let time = 0;
     const limiter = createRateLimiter({ max: 5, windowMs: 1000, now: () => time, keyOf: (req) => req.ip });
     const res = { set() {} };

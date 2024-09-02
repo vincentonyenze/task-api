@@ -8,8 +8,10 @@
   "scripts": {
     "start": "node --env-file-if-exists=.env src/server.js",
     "dev": "node --env-file-if-exists=.env --watch src/server.js",
-    "test": "node --test",
-    "test:watch": "node --test --watch"
+    "test": "node --test \"src/**/*.test.js\" \"test/**/*.test.js\"",
+    "test:watch": "node --test --watch \"src/**/*.test.js\" \"test/**/*.test.js\"",
+    "test:unit": "node --test \"src/**/*.test.js\"",
+    "test:integration": "node --test \"test/**/*.test.js\""
   },
   "engines": {
     "node": ">=22"

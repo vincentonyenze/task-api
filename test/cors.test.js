@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
-import { createApp } from "../app.js";
+import { startTestApi } from "./helpers/testApi.js";
 
 // Node's fetch lets a test set the Origin header itself (a browser never
 // would), so these tests can play every part: a page on an allowed origin,
@@ -8,13 +8,7 @@ import { createApp } from "../app.js";
 const ALLOWED = "http://localhost:5173";
 const STRANGER = "https://evil.example";
 
-// Starts an app with the given allowed origins; returns its address and
-// a way to stop it
-async function startApp(corsOrigins) {
-  const server = createApp({ environment: "test", corsOrigins }).listen(0);
-  await new Promise((resolve) => server.once("listening", resolve));
-  return { base: `http://localhost:${server.address().port}`, close: () => server.close() };
-}
+const startApp = (corsOrigins) => startTestApi({ corsOrigins });
 
 // What a browser sends before a PATCH with a JSON body
 const preflight = (base, origin, method = "PATCH") =>
